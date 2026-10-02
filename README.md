@@ -1,37 +1,45 @@
-# UserWidget React POC
+# UserWidget Module Federation POC
 
-This small React 18 proof of concept demonstrates React Router, React Context, a custom context hook, TanStack React Query, a JSONPlaceholder API request, and a styled-components widget. It intentionally has no Module Federation configuration.
+This repository is the **remote** application. It keeps a standalone preview at `/widget` and exposes a provider-wrapped React component as `userWidget/UserWidget` through Webpack 5 Module Federation.
 
-## Project layout
+The independent consumer application is in the sibling directory `~/Projects/MFPOC-Host`. It has its own package manifest, lockfile, Webpack configuration, and local Git repository. It consumes this remote through `remoteEntry.js`; it never imports this repository's source files.
 
-- `src/` contains the React and TypeScript application code.
-- `public/` contains the HTML template and static assets.
-- `scripts/` contains Node start, build, and test entry points.
-- `config/` contains paths, environment loading, and the Webpack configuration factory.
+## Remote component contract
 
-## UserWidget
+`src/federation/UserWidgetEntry.tsx` is the public component wrapper. It accepts optional `userId`, `tenantId`, and `appTheme` props. The wrapper builds the app context and supplies a React Query client before rendering the existing `UserWidget`. The widget consumes context through `useAppContext()`, loads user data through React Query and `src/api/users.ts`, and renders the styled-components UI.
 
-`/widget` renders `UserWidget` under application-level `AppProvider` and `QueryClientProvider`. The widget reads the current user ID, tenant, and theme through `useAppContext()`, queries JSONPlaceholder for that user, and renders loading, error, or profile content. The context hook throws if `AppProvider` is missing. `UserWidget` does not import the app shell, pages, or React Router.
+Webpack exposes `./UserWidget` as `userWidget/UserWidget`. React, React DOM, TanStack React Query, and styled-components are configured as singleton shared dependencies with their versions declared by the remote. `publicPath: "auto"` lets remote chunks load from the remote's own origin.
 
-Its current integration dependencies are React, `@tanstack/react-query` (and a host QueryClientProvider), styled-components, the app-specific context contract/provider, and the local API module. API requests use `https://jsonplaceholder.typicode.com/users/{id}`.
+`src/bootstrap.tsx` starts the remote's standalone preview. `src/index.tsx` imports it asynchronously so shared modules initialize before the app mounts. The host does not use this standalone bootstrap: it imports the component with `React.lazy`, renders it under `Suspense`, and passes props directly.
 
-## Scripts and behavior
-
-- `npm start` sets development environments, fails on unhandled promise rejections, loads `.env` files, checks required files, starts webpack-dev-server on port 3000 by default, honors `HOST` and `PORT`, opens the browser by default (`BROWSER=none` disables that for headless use), and shuts down on SIGINT/SIGTERM.
-- `npm run build` sets production environments, loads `.env` files, cleans `build/`, copies `public/` assets except `index.html`, and runs Webpack production mode. It reports errors and warnings; `CI=true` makes warnings fail the build.
-- `npm test` runs Node's built-in test runner for `*.test.js` files that are added.
-
-Webpack has one development/production config factory, Babel support for TS/TSX and JS/JSX, CSS and SCSS loaders with PostCSS autoprefixing, asset modules for images/fonts, env-controlled source maps, production content hashes and minification, DefinePlugin env injection, and filesystem cache.
-
-## Run
+## Run the standalone remote
 
 ```sh
-npm install
+npm ci
 npm start
 ```
 
-Run `npm run build` for a production build. Copy `.env` to `.env.local` for local overrides; client-visible custom variables must start with `REACT_APP_`.
+This serves the preview and `http://localhost:3000/remoteEntry.js`. `BROWSER=none` prevents automatic browser opening.
 
-## Later Module Federation work
+## Run the separate host
 
-The remote will need an exposure for `./UserWidget` and a host dynamic import/remote entry configuration. We will need to decide how React, React DOM, React Query, and styled-components are shared, including compatible versions and singleton behavior, and who provides context and the query client. The context hook and API module are currently bundled application-specific dependencies. The host/remote contract should cover user and tenant inputs, theme, API base URL, provider ownership, and style injection. Those federation changes are intentionally deferred.
+In another terminal:
+
+```sh
+cd ~/Projects/MFPOC-Host
+npm ci
+npm start
+```
+
+The host defaults to the remote at `http://localhost:3000` and serves on port 3001. Start the remote first. To consume a deployed remote, set `USER_WIDGET_REMOTE_URL` to its origin in the host build environment.
+
+The host owns the TypeScript declaration for `userWidget/UserWidget` in `~/Projects/MFPOC-Host/src/types/remotes.d.ts`, because this module name is resolved by the host's Webpack configuration.
+
+## Build and typecheck
+
+```sh
+npm run build
+npx tsc --noEmit
+```
+
+The production build emits `build/remoteEntry.js` and the chunks required by the exposed component. For the deployed host, set output directory to `build` and set `USER_WIDGET_REMOTE_URL` to the deployed remote origin.

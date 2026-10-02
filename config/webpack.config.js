@@ -1,9 +1,10 @@
-const path = require("path");
 const webpack = require("webpack");
+const { ModuleFederationPlugin } = webpack.container;
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const paths = require("./paths");
 const { getClientEnvironment } = require("./env");
+const dependencies = require("../package.json").dependencies;
 
 module.exports = (_env, argv = {}) => {
   const isProduction = (argv.mode || process.env.NODE_ENV) === "production";
@@ -18,13 +19,15 @@ module.exports = (_env, argv = {}) => {
   return {
     mode: isProduction ? "production" : "development",
     bail: isProduction,
+    context: paths.appDirectory,
     entry: paths.appIndex,
     output: {
       path: paths.appBuild,
       filename: isProduction ? "static/js/[name].[contenthash:8].js" : "static/js/[name].js",
       chunkFilename: isProduction ? "static/js/[name].[contenthash:8].chunk.js" : "static/js/[name].chunk.js",
       assetModuleFilename: "static/media/[name].[contenthash:8][ext]",
-      publicPath: "/",
+      publicPath: "auto",
+      uniqueName: "userWidgetRemote",
       clean: false
     },
     devtool: shouldUseSourceMap ? (isProduction ? "source-map" : "eval-cheap-module-source-map") : false,
@@ -42,8 +45,19 @@ module.exports = (_env, argv = {}) => {
       ]
     },
     plugins: [
-      new HtmlWebpackPlugin({ template: paths.appHtml, inject: "body" }),
+      new HtmlWebpackPlugin({ template: paths.appHtml, inject: "body", publicPath: "/" }),
       new webpack.DefinePlugin(getClientEnvironment().stringified),
+      new ModuleFederationPlugin({
+        name: "userWidget",
+        filename: "remoteEntry.js",
+        exposes: { "./UserWidget": "./src/federation/UserWidgetEntry.tsx" },
+        shared: {
+          react: { singleton: true, requiredVersion: dependencies.react },
+          "react-dom": { singleton: true, requiredVersion: dependencies["react-dom"] },
+          "@tanstack/react-query": { singleton: true, requiredVersion: dependencies["@tanstack/react-query"] },
+          "styled-components": { singleton: true, requiredVersion: dependencies["styled-components"] }
+        }
+      }),
       ...(isProduction ? [new MiniCssExtractPlugin({ filename: "static/css/[name].[contenthash:8].css", chunkFilename: "static/css/[name].[contenthash:8].chunk.css" })] : [])
     ],
     optimization: {

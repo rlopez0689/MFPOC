@@ -1,4 +1,4 @@
-import { createContext, useMemo, type ReactNode } from "react";
+import { createContext, type ReactNode } from "react";
 
 export interface AppContextValue {
   currentUser: { id: number; displayName: string };
@@ -6,14 +6,20 @@ export interface AppContextValue {
   appTheme: string;
 }
 
+export const defaultAppContext: AppContextValue = {
+  currentUser: { id: 1, displayName: "Alex Morgan" },
+  tenantId: "northwind-demo",
+  appTheme: "violet"
+};
+
 export const AppContext = createContext<AppContextValue | undefined>(undefined);
 
-export function AppProvider({ children }: { children: ReactNode }) {
-  const value = useMemo<AppContextValue>(() => ({
-    currentUser: { id: 1, displayName: "Alex Morgan" },
-    tenantId: "northwind-demo",
-    appTheme: "violet"
-  }), []);
-
+export function AppProvider({
+  children,
+  value = defaultAppContext
+}: {
+  children: ReactNode;
+  value?: AppContextValue;
+}) {
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
