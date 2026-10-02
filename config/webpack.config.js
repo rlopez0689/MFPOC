@@ -63,7 +63,9 @@ module.exports = (_env, argv = {}) => {
     optimization: {
       minimize: isProduction,
       splitChunks: isProduction ? { chunks: "all" } : false,
-      runtimeChunk: isProduction ? "single" : false
+      // The federation container must initialize when a host loads only
+      // remoteEntry.js; an extracted runtime chunk is not loaded by the host.
+      runtimeChunk: false
     },
     performance: { hints: isProduction ? "warning" : false },
     devServer: {
